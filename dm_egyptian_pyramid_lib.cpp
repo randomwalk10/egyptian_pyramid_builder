@@ -35,19 +35,22 @@ bool findRectIntersect(cv::Rect& rect1, cv::Rect& rect2, \
 /*
  * class definition
  * */
-dm_egyptian_pyramid_lib::dm_egyptian_pyramid_lib(const char* file_dir, \
+dm_egyptian_pyramid_lib::dm_egyptian_pyramid_lib(const char* input_file_dir, \
+												const char* output_file_dir, \
 												const int mat_id, \
 												const unsigned int tile_width, \
 												const unsigned int tile_height, \
 												const float max_cache_size_in_megabytes){
-	this->file_dir_str = std::string(file_dir);
+	this->input_file_dir_str = std::string(input_file_dir);
+	this->output_file_dir_str = std::string(output_file_dir);
 	this->mat_id = mat_id;
 	this->tile_width = tile_width;
 	this->tile_height = tile_height;
-	this->lru_cache = dm_img_lrucache_lib(max_cache_size_in_megabytes);
+	this->lru_cache_ptr = new dm_img_lrucache_lib(max_cache_size_in_megabytes);
 }
 dm_egyptian_pyramid_lib::~dm_egyptian_pyramid_lib(){
 	this->clearAll();
+	delete lru_cache_ptr;
 }
 /*reset*/
 void dm_egyptian_pyramid_lib::clearAll(){
@@ -57,7 +60,7 @@ void dm_egyptian_pyramid_lib::clearAll(){
 	this->base_tile_layout.clear();
 	this->pyramid_tile_layout.clear();
 	this->layer_sizes.clear();
-	this->lru_cache.clearAll();
+	this->lru_cache_ptr->clearAll();
 }
 /*register tile info*/
 int dm_egyptian_pyramid_lib::registerBaseTile(int x_index, int y_index, \
@@ -95,13 +98,15 @@ int dm_egyptian_pyramid_lib::build(int tile_range_x, int tile_range_y, \
 		if(DM_IMG_PROC_RETURN_OK!=r) return r;
 		//start work thread
 		for (int i = 0; i < num_of_threads; ++i) {
-			//workers.push_back();
+			workers.push_back(std::thread( \
+						&dm_egyptian_pyramid_lib::workerThread, this, i \
+						));
 		}
 		//join threads
 		for (int i = 0; i < num_of_threads; ++i) {
 			workers[i].join();
 		}
-		//any post process?
+		//post process(output info)
 	}
 	/*return ok*/
 	return DM_IMG_PROC_RETURN_OK;
@@ -176,11 +181,11 @@ int dm_egyptian_pyramid_lib::getFirstLayerFromBase(){
 				//tile index
 				pyramid_tile_index new_tile_index(i+1, j+1, 1);
 				//tile obj
-				float tl_x_pos = ul_limit_x + \
-								 (float)(i*this->tile_width);
-				float tl_y_pos = ul_limit_y + \
-								 (float)(j*this->tile_height);
-				pyramid_tile_obj new_tile_obj(tl_x_pos, tl_y_pos, \
+				long long tl_x_pos = (long long)ul_limit_x + \
+								 (i*this->tile_width);
+				long long tl_y_pos = (long long)ul_limit_y + \
+								 (j*this->tile_height);
+				pyramid_tile_obj new_tile_obj((float)tl_x_pos, (float)tl_y_pos, \
 											this->tile_width, \
 											this->tile_height, \
 											0, 0);
@@ -190,6 +195,7 @@ int dm_egyptian_pyramid_lib::getFirstLayerFromBase(){
 		//update layer sizes
 		this->layer_sizes.push_back( \
 				pyramid_layer_size(tile_num_x, tile_num_y));
+		printf("first layer size %d %d\n", tile_num_x, tile_num_y);
 	}
 	/*return*/
 	return DM_IMG_PROC_RETURN_OK;
@@ -221,6 +227,8 @@ int dm_egyptian_pyramid_lib::calculateLayout(){
 			int cur_tile_num_y = (int)( (prev_tile_num_y+1)/2 );
 			this->layer_sizes.push_back( \
 					pyramid_layer_size(cur_tile_num_x, cur_tile_num_y) );
+			printf("layer %d size %d %d\n", current_layer, \
+					cur_tile_num_x, cur_tile_num_y);
 			//generate layout for current layer
 			for (int i = 0; i < cur_tile_num_x; ++i) {
 				for (int j = 0; j < cur_tile_num_y; ++j) {
@@ -309,7 +317,7 @@ int dm_egyptian_pyramid_lib::generateWorkSchedule( \
 	return DM_IMG_PROC_RETURN_OK;
 }
 /*worker thread definition*/
-void dm_egyptian_pyramid_lib::workerThread(){
+void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 	/*check input*/
 	/*local var*/
 	std::vector<pyramid_tile_index> tile_list;
@@ -331,6 +339,8 @@ void dm_egyptian_pyramid_lib::workerThread(){
 			tile_list = this->work_queue.front();
 			this->work_queue.pop();
 		}
+		printf("thread[%d] got work of size %d at layer %d!\n", \
+				thread_id, (int)tile_list.size(), tile_list.front().pyramid_level);
 		//start processing work
 		if(false == tile_list.empty()){
 			//get current layer number
@@ -340,10 +350,12 @@ void dm_egyptian_pyramid_lib::workerThread(){
 				//find tiles in base layer intersecting with the rect
 				std::vector<pyramid_tile_index> base_tiles;
 				this->getInterSectingBaseTiles(tile_list, base_tiles);
+				cv::Rect block_rect;
 				float min_x, min_y, max_x, max_y;
 				float temp_x, temp_y;
-				cv::Rect block_rect;
 				//generate tile images for 1st layer
+				printf("thread[%d] base tiles size %d\n", thread_id, \
+						(int)base_tiles.size());
 				if(false == base_tiles.empty()){
 					//find the range of base layer images
 					for(std::vector<pyramid_tile_index>::iterator \
@@ -352,7 +364,7 @@ void dm_egyptian_pyramid_lib::workerThread(){
 						std::map<pyramid_tile_index, pyramid_tile_obj>::iterator \
 										layout_iter = this->base_tile_layout.find(*iter); 
 						//update min_x, min_y, max_x, max_y
-						if( layout_iter==this->base_tile_layout.begin() ){
+						if( iter==base_tiles.begin() ){
 							min_x = layout_iter->second.tl_x_pos + \
 									(float)(layout_iter->second.x_offset);
 							min_y = layout_iter->second.tl_y_pos + \
@@ -380,6 +392,8 @@ void dm_egyptian_pyramid_lib::workerThread(){
 					}	
 					block_rect = cv::Rect((int)min_x, (int)min_y, \
 											(int)(max_x-min_x), (int)(max_y-min_y));
+					printf("thread[%d] block_rect %d, %d, %d, %d\n", thread_id, \
+							(int)min_x, (int)min_y, (int)(max_x-min_x), (int)(max_y-min_y));
 					//find image data in cache or disk storage
 					//perform image blending if possible
 					cv::Mat block_image = cv::Mat::zeros((int)(max_y-min_y), \
@@ -394,13 +408,13 @@ void dm_egyptian_pyramid_lib::workerThread(){
 						cv::Mat new_img;
 						{
 							std::lock_guard<std::mutex> lck(lru_mtx);
-							if( false == this->lru_cache.get(*iter, new_img) ){
+							if( false == this->lru_cache_ptr->get(*iter, new_img) ){
 								cv::Mat raw_img = cv::imread( \
-														this->file_dir_str+"/tile_"+ \
-														NumberToString(this->mat_id)+ \
-														"_"+NumberToString(iter->x)+ \
-														"_"+NumberToString(iter->y)+".jpg", \
-														cv::IMREAD_UNCHANGED);
+										this->input_file_dir_str+"/tile_"+ \
+										NumberToString(this->mat_id)+ \
+										"_"+NumberToString(iter->x)+ \
+										"_"+NumberToString(iter->y)+".jpg", \
+										cv::IMREAD_UNCHANGED);
 								if(false==raw_img.empty()){
 									cv::Point img_offset = cv::Point( \
 											layout_iter->second.x_offset, \
@@ -410,7 +424,7 @@ void dm_egyptian_pyramid_lib::workerThread(){
 											layout_iter->second.height );
 									new_img = cv::Mat(raw_img, \
 												cv::Rect(img_offset, img_size));
-									this->lru_cache.put(*iter, new_img);
+									this->lru_cache_ptr->put(*iter, new_img);
 								}
 							}
 						}
@@ -422,6 +436,7 @@ void dm_egyptian_pyramid_lib::workerThread(){
 								min_y, \
 							layout_iter->second.width, layout_iter->second.height)) );
 					}
+					printf("thread[%d] block_image finished\n", thread_id);
 					//output to tile with tile_width and tile_height
 					for(std::vector<pyramid_tile_index>::iterator \
 							iter=tile_list.begin(); \
@@ -449,10 +464,10 @@ void dm_egyptian_pyramid_lib::workerThread(){
 						//save to disk and cache
 						{
 							std::lock_guard<std::mutex> lck(lru_mtx);
-							this->lru_cache.put(*iter, new_img);
+							this->lru_cache_ptr->put(*iter, new_img);
 						}
 						{
-							std::string out_string = file_dir_str+"/pr_"+ \
+							std::string out_string = output_file_dir_str+"/pr_"+ \
 													 NumberToString(this->mat_id)+"_"+ \
 													 NumberToString(iter->x)+"_"+ \
 													 NumberToString(iter->y)+"_"+ \
@@ -466,12 +481,76 @@ void dm_egyptian_pyramid_lib::workerThread(){
 							fclose(pFile);
 						}
 					}
+					printf("thread[%d] output tile finished\n", thread_id);
 				}
 			}
 			else{
-				//find tiles in the previous layer
-				//find image data in cache or disk storage
-				//generate tile images for 2nd layer and above
+				for(std::vector<pyramid_tile_index>::iterator \
+						iter=tile_list.begin(); \
+						iter!=tile_list.end(); ++iter){
+					//find tiles in the previous layer
+					pyramid_tile_index tl_index, tr_index, bl_index, br_index;
+					tl_index = pyramid_tile_index( \
+										2*(iter->x)-1, 2*(iter->y)-1, \
+										iter->pyramid_level-1 \
+										);
+					tr_index = pyramid_tile_index( \
+										2*(iter->x), 2*(iter->y)-1, \
+										iter->pyramid_level-1 \
+										);
+					bl_index = pyramid_tile_index( \
+										2*(iter->x)-1, 2*(iter->y), \
+										iter->pyramid_level-1 \
+										);
+					br_index = pyramid_tile_index( \
+										2*(iter->x), 2*(iter->y), \
+										iter->pyramid_level-1 \
+										);
+					//find image data in cache or disk storage
+					//or wait until data is available
+					cv::Mat block_image = cv::Mat::zeros((int)(2*(this->tile_height)), \
+														(int)(2*(this->tile_width)), \
+														CV_8UC3);
+					{
+						//tl
+						this->copyToBlock(tl_index, block_image, \
+								cv::Rect(0, 0, this->tile_width, this->tile_height) );
+						//tr
+						this->copyToBlock(tr_index, block_image, \
+								cv::Rect(this->tile_width, 0, \
+									this->tile_width, this->tile_height) );
+						//bl
+						this->copyToBlock(bl_index, block_image, \
+								cv::Rect(0, this->tile_height, \
+									this->tile_width, this->tile_height) );
+						//br
+						this->copyToBlock(br_index, block_image, \
+								cv::Rect(this->tile_width, this->tile_height, \
+									this->tile_width, this->tile_height) );
+					}
+					//generate tile images for 2nd layer and above
+					cv::Mat new_img;
+					cv::resize(block_image, new_img, cv::Size(), 0.5, 0.5, cv::INTER_AREA);
+					//save to disk and cache
+					{
+						std::lock_guard<std::mutex> lck(lru_mtx);
+						this->lru_cache_ptr->put(*iter, new_img);
+					}
+					{
+						std::string out_string = output_file_dir_str+"/pr_"+ \
+												 NumberToString(this->mat_id)+"_"+ \
+												 NumberToString(iter->x)+"_"+ \
+												 NumberToString(iter->y)+"_"+ \
+												 NumberToString(iter->pyramid_level)+".jpg";
+						std::vector<uchar> jpg_image;
+						cv::imencode(".jpg", new_img, jpg_image, comp_params);
+						FILE *pFile = std::fopen(out_string.c_str(), \
+													"wb");
+						std::fwrite(&jpg_image[0], sizeof(char), \
+										jpg_image.size(), pFile);
+						fclose(pFile);
+					}
+				}
 			}
 		}
 	}
@@ -553,6 +632,42 @@ void dm_egyptian_pyramid_lib::getInterSectingBaseTiles( \
 				output_base_tiles.push_back( layout_iter->first );
 			}
 		}
+	}
+	/*return*/
+	return;
+}
+/*copy image data to image block*/
+void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
+											cv::Mat &block_image, \
+											cv::Rect copyArea){
+	/*local var*/
+	bool exitFlag;
+	std::map<pyramid_tile_index, pyramid_tile_obj>::iterator \
+					layout_iter;
+	/*init*/
+	exitFlag = false;
+	layout_iter = this->pyramid_tile_layout.find(target_index);
+	/*copy to block*/
+	if(this->pyramid_tile_layout.end()!=layout_iter){
+		cv::Mat raw_img;
+		while(false==exitFlag){
+			if(false==this->lru_cache_ptr->get(target_index, raw_img)){
+				raw_img = cv::imread( \
+						this->output_file_dir_str+"/pr_"+ \
+						NumberToString(this->mat_id)+ \
+						"_"+NumberToString(target_index.x)+ \
+						"_"+NumberToString(target_index.y)+ \
+						"_"+NumberToString(target_index.pyramid_level)+".jpg", \
+						cv::IMREAD_UNCHANGED);
+				if(false==raw_img.empty()){
+					exitFlag = true;
+				}
+				else std::this_thread::sleep_for( \
+						std::chrono::milliseconds(10));
+			}
+			else exitFlag = true;
+		}
+		raw_img.copyTo( block_image( copyArea ) );
 	}
 	/*return*/
 	return;
