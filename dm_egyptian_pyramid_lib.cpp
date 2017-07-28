@@ -10,6 +10,7 @@
 /*local var definition*/
 std::mutex work_queue_mtx;
 std::mutex lru_mtx;
+std::mutex test_mtx;
 /*local function definition*/
 bool findRectIntersect(cv::Rect& rect1, cv::Rect& rect2, \
 						cv::Rect& out_rect){
@@ -353,6 +354,7 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 				cv::Rect block_rect;
 				float min_x, min_y, max_x, max_y;
 				float temp_x, temp_y;
+				bool dataExists;
 				//generate tile images for 1st layer
 				if(false == base_tiles.empty()){
 					//find the range of base layer images
@@ -403,14 +405,19 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 						//get new_img either from disk or cache
 						cv::Mat new_img;
 						{
-							std::lock_guard<std::mutex> lck(lru_mtx);
-							if( false == this->lru_cache_ptr->get(*iter, new_img) ){
+							{
+								std::lock_guard<std::mutex> lck(lru_mtx);
+								dataExists = this->lru_cache_ptr->get(*iter, new_img);
+							}
+							if( false == dataExists ){
+								//test_mtx.lock();
 								cv::Mat raw_img = cv::imread( \
 										this->input_file_dir_str+"/tile_"+ \
 										NumberToString(this->mat_id)+ \
 										"_"+NumberToString(iter->x)+ \
 										"_"+NumberToString(iter->y)+".jpg", \
 										cv::IMREAD_UNCHANGED);
+								//test_mtx.unlock();
 								if(false==raw_img.empty()){
 									cv::Point img_offset = cv::Point( \
 											layout_iter->second.x_offset, \
@@ -420,8 +427,44 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 											layout_iter->second.height );
 									new_img = cv::Mat(raw_img, \
 												cv::Rect(img_offset, img_size));
-									this->lru_cache_ptr->put(*iter, new_img);
+									{
+										std::lock_guard<std::mutex> lck(lru_mtx);
+										this->lru_cache_ptr->put(*iter, new_img);
+									}
 								}
+								
+								////test_mtx.lock();
+								//std::string image_path_str = \
+										//this->input_file_dir_str+"/tile_"+ \
+										//NumberToString(this->mat_id)+ \
+										//"_"+NumberToString(iter->x)+ \
+										//"_"+NumberToString(iter->y)+".jpg";
+								//FILE* pFile = fopen(image_path_str.c_str(), "rb");
+								//fseek(pFile, 0, SEEK_END);
+								//size_t jpg_size = ftell(pFile);
+								//fseek(pFile, 0, SEEK_SET);
+								//char* raw_buffer = new char[jpg_size];
+								//fread(raw_buffer, sizeof(char), jpg_size, pFile);
+								//cv::Mat raw_img = cv::imdecode( \
+										//cv::Mat(1, jpg_size, CV_8UC1, raw_buffer), \
+										//CV_LOAD_IMAGE_UNCHANGED );
+								////test_mtx.unlock();
+								//if(false==raw_img.empty()){
+									//cv::Point img_offset = cv::Point( \
+											//layout_iter->second.x_offset, \
+											//layout_iter->second.y_offset );
+									//cv::Size img_size = cv::Size( \
+											//layout_iter->second.width, \
+											//layout_iter->second.height );
+									//new_img = cv::Mat(raw_img, \
+												//cv::Rect(img_offset, img_size)).clone();
+									//{
+										//std::lock_guard<std::mutex> lck(lru_mtx);
+										//this->lru_cache_ptr->put(*iter, new_img);
+									//}
+								//}
+								//raw_img.release();
+								//delete[] raw_buffer;
 							}
 						}
 						//copy it to block_image
@@ -651,6 +694,7 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 							 this->lru_cache_ptr->get(target_index, raw_img);
 			}
 			if(false==dataExists){
+				//test_mtx.lock();
 				raw_img = cv::imread( \
 						this->output_file_dir_str+"/pr_"+ \
 						NumberToString(this->mat_id)+ \
@@ -658,6 +702,7 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 						"_"+NumberToString(target_index.y)+ \
 						"_"+NumberToString(target_index.pyramid_level)+".jpg", \
 						cv::IMREAD_UNCHANGED);
+				//test_mtx.unlock();
 				if(false==raw_img.empty()){
 					exitFlag = true;
 				}
@@ -667,6 +712,42 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 			else exitFlag = true;
 		}
 		raw_img.copyTo( block_image( copyArea ) );
+		
+		//cv::Mat raw_img;
+		//while(false==exitFlag){
+			//{
+				//std::lock_guard<std::mutex> lck(lru_mtx);
+				//dataExists = \
+							 //this->lru_cache_ptr->get(target_index, raw_img);
+			//}
+			//if(false==dataExists){
+				////test_mtx.lock();
+				//std::string image_path_str = \
+						//this->output_file_dir_str+"/pr_"+ \
+						//NumberToString(this->mat_id)+ \
+						//"_"+NumberToString(target_index.x)+ \
+						//"_"+NumberToString(target_index.y)+ \
+						//"_"+NumberToString(target_index.pyramid_level)+".jpg";
+				//FILE* pFile = fopen(image_path_str.c_str(), "rb");
+				//fseek(pFile, 0, SEEK_END);
+				//size_t jpg_size = ftell(pFile);
+				//fseek(pFile, 0, SEEK_SET);
+				//char* raw_buffer = new char[jpg_size];
+				//fread(raw_buffer, sizeof(char), jpg_size, pFile);
+				//raw_img = cv::imdecode( \
+						//cv::Mat(1, jpg_size, CV_8UC1, raw_buffer), \
+						//CV_LOAD_IMAGE_UNCHANGED );
+				////delete[] raw_buffer;
+				////test_mtx.unlock();
+				//if(false==raw_img.empty()){
+					//exitFlag = true;
+				//}
+				//else std::this_thread::sleep_for( \
+						//std::chrono::milliseconds(10));
+			//}
+			//else exitFlag = true;
+		//}
+		//raw_img.copyTo( block_image( copyArea ) );
 	}
 	/*return*/
 	return;

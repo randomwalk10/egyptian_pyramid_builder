@@ -44,8 +44,8 @@ int egyptian_pyramid(const char* input_tile_dir, \
 #ifdef _WIN32
             if(new_line=="[tile_num]"){
 #else
-            //if(new_line=="[tile_num]\r"){
-            if(new_line=="[tile_num]"){
+			//if(new_line=="[tile_num]\r"){
+			if(new_line=="[tile_num]"){
 #endif
                 getline(file_in, new_line);
                 istringstream ss(new_line);
@@ -63,8 +63,8 @@ int egyptian_pyramid(const char* input_tile_dir, \
 #ifdef _WIN32
             if(new_line=="[align_tile_pos_scene_topleft]"){
 #else
-            //if(new_line=="[align_tile_pos_scene_topleft]\r"){
-            if(new_line=="[align_tile_pos_scene_topleft]"){
+			//if(new_line=="[align_tile_pos_scene_topleft]\r"){
+			if(new_line=="[align_tile_pos_scene_topleft]"){
 #endif
                 for(int i=0;i<total_tile_num;i++){
                     getline(file_in, new_line);
@@ -104,8 +104,8 @@ int egyptian_pyramid(const char* input_tile_dir, \
 #ifdef _WIN32
             if(new_line=="[resize_tile_pos_scene_topleft]"){
 #else
-            //if(new_line=="[resize_tile_pos_scene_topleft]\r"){
-            if(new_line=="[resize_tile_pos_scene_topleft]"){
+			//if(new_line=="[resize_tile_pos_scene_topleft]\r"){
+			if(new_line=="[resize_tile_pos_scene_topleft]"){
 #endif
                 for(int i=0;i<total_tile_num;i++){
                     getline(file_in, new_line);
@@ -213,7 +213,7 @@ int egyptian_pyramid(const char* input_tile_dir, \
 			clock_gettime(CLOCK_MONOTONIC, &start);
 #endif
 
-			devPtr->build(20, 20, 7);
+			devPtr->build(50, 50, 7);
 
 
 			cout << "egyptian pyramiding is finished";
@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
 													output_file_dir.c_str(), \
 													0, 256, 256, 16000.0);
 
-	for (int i = 0; i < 100; ++i) {
+	for (int i = 0; i < 1; ++i) {
 		printf("test#%d starts\n", i+1);
 
 		int r = egyptian_pyramid(input_file_dir.c_str(), \
