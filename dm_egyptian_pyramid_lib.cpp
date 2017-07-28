@@ -50,7 +50,7 @@ dm_egyptian_pyramid_lib::dm_egyptian_pyramid_lib(const char* input_file_dir, \
 }
 dm_egyptian_pyramid_lib::~dm_egyptian_pyramid_lib(){
 	this->clearAll();
-	delete lru_cache_ptr;
+	delete this->lru_cache_ptr;
 }
 /*reset*/
 void dm_egyptian_pyramid_lib::clearAll(){
@@ -354,8 +354,6 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 				float min_x, min_y, max_x, max_y;
 				float temp_x, temp_y;
 				//generate tile images for 1st layer
-				printf("thread[%d] base tiles size %d\n", thread_id, \
-						(int)base_tiles.size());
 				if(false == base_tiles.empty()){
 					//find the range of base layer images
 					for(std::vector<pyramid_tile_index>::iterator \
@@ -392,8 +390,6 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 					}	
 					block_rect = cv::Rect((int)min_x, (int)min_y, \
 											(int)(max_x-min_x), (int)(max_y-min_y));
-					printf("thread[%d] block_rect %d, %d, %d, %d\n", thread_id, \
-							(int)min_x, (int)min_y, (int)(max_x-min_x), (int)(max_y-min_y));
 					//find image data in cache or disk storage
 					//perform image blending if possible
 					cv::Mat block_image = cv::Mat::zeros((int)(max_y-min_y), \
@@ -436,7 +432,6 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 								min_y, \
 							layout_iter->second.width, layout_iter->second.height)) );
 					}
-					printf("thread[%d] block_image finished\n", thread_id);
 					//output to tile with tile_width and tile_height
 					for(std::vector<pyramid_tile_index>::iterator \
 							iter=tile_list.begin(); \
@@ -481,7 +476,6 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 							fclose(pFile);
 						}
 					}
-					printf("thread[%d] output tile finished\n", thread_id);
 				}
 			}
 			else{
@@ -641,7 +635,7 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 											cv::Mat &block_image, \
 											cv::Rect copyArea){
 	/*local var*/
-	bool exitFlag;
+	bool exitFlag, dataExists;
 	std::map<pyramid_tile_index, pyramid_tile_obj>::iterator \
 					layout_iter;
 	/*init*/
@@ -651,7 +645,12 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 	if(this->pyramid_tile_layout.end()!=layout_iter){
 		cv::Mat raw_img;
 		while(false==exitFlag){
-			if(false==this->lru_cache_ptr->get(target_index, raw_img)){
+			{
+				std::lock_guard<std::mutex> lck(lru_mtx);
+				dataExists = \
+							 this->lru_cache_ptr->get(target_index, raw_img);
+			}
+			if(false==dataExists){
 				raw_img = cv::imread( \
 						this->output_file_dir_str+"/pr_"+ \
 						NumberToString(this->mat_id)+ \

@@ -13,8 +13,8 @@ dm_img_lrucache_lib::~dm_img_lrucache_lib(){
 }
 //clear all
 void dm_img_lrucache_lib::clearAll(){
-	this->_cache_items_list.clear();
 	this->_cache_items_map.clear();
+	this->_cache_items_list.clear();
 	this->_cur_size = 0.f;
 }
 //insert
