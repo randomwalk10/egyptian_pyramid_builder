@@ -25,7 +25,7 @@ class dm_egyptian_pyramid_lib{
 						int x_offset, int y_offset);
 		/*start building*/
 		int build(int tile_range_x, int tile_range_y, \
-					int num_of_threads);
+					int num_of_threads, unsigned int use_blender);
 	protected:
 
 	private:
@@ -40,7 +40,7 @@ class dm_egyptian_pyramid_lib{
 		int getFirstLayerFromBase();
 		int calculateLayout();
 		int generateWorkSchedule(int tile_range_x, int tile_range_y);
-		void workerThread(const int thread_id);
+		void workerThread(const int thread_id, const bool useBlender);
 		void getInterSectingBaseTiles( \
 				std::vector<pyramid_tile_index> &input_tiles, \
 				std::vector<pyramid_tile_index> &output_base_tiles);

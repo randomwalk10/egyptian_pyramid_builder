@@ -3,9 +3,11 @@
 #include "dm_egyptian_pyramid_lib.h"
 #include "opencv2/opencv.hpp"
 #include "opencv2/imgproc.hpp"
+#include "opencv2/stitching/detail/blenders.hpp"
 #include <thread>
 #include <mutex>
 #include <chrono>
+using namespace cv::detail;
 /*constant definition*/
 /*local var definition*/
 std::mutex work_queue_mtx;
@@ -77,7 +79,7 @@ int dm_egyptian_pyramid_lib::registerBaseTile(int x_index, int y_index, \
 }
 /*start building*/
 int dm_egyptian_pyramid_lib::build(int tile_range_x, int tile_range_y, \
-									int num_of_threads){
+									int num_of_threads, unsigned int use_blender){
 	/*check input*/
 	if( (1>tile_range_x)||(1>tile_range_y) ){
 		return DM_IMG_PROC_RETURN_FAIL;
@@ -88,7 +90,9 @@ int dm_egyptian_pyramid_lib::build(int tile_range_x, int tile_range_y, \
 	/*local var*/
 	int r;
 	std::vector<std::thread> workers;
+	bool useBlender;
 	/*init*/
+	useBlender = (0==use_blender)?false:true;
 	/*build*/
 	{
 		//calculate layout
@@ -100,7 +104,7 @@ int dm_egyptian_pyramid_lib::build(int tile_range_x, int tile_range_y, \
 		//start work thread
 		for (int i = 0; i < num_of_threads; ++i) {
 			workers.push_back(std::thread( \
-						&dm_egyptian_pyramid_lib::workerThread, this, i \
+						&dm_egyptian_pyramid_lib::workerThread, this, i, useBlender \
 						));
 		}
 		//join threads
@@ -318,7 +322,7 @@ int dm_egyptian_pyramid_lib::generateWorkSchedule( \
 	return DM_IMG_PROC_RETURN_OK;
 }
 /*worker thread definition*/
-void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
+void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBlender){
 	/*check input*/
 	/*local var*/
 	std::vector<pyramid_tile_index> tile_list;
@@ -340,8 +344,8 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 			tile_list = this->work_queue.front();
 			this->work_queue.pop();
 		}
-		printf("thread[%d] got work of size %d at layer %d!\n", \
-				thread_id, (int)tile_list.size(), tile_list.front().pyramid_level);
+		printf("thread[%d] got work of size %d at layer %d with useBlender[%d]!\n", \
+				thread_id, (int)tile_list.size(), tile_list.front().pyramid_level, useBlender);
 		//start processing work
 		if(false == tile_list.empty()){
 			//get current layer number
@@ -394,9 +398,46 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 											(int)(max_x-min_x), (int)(max_y-min_y));
 					//find image data in cache or disk storage
 					//perform image blending if possible
-					cv::Mat block_image = cv::Mat::zeros((int)(max_y-min_y), \
-														(int)(max_x-min_x), \
-														CV_8UC3);
+					cv::Mat block_image;
+					cv::Ptr<Blender> blender;
+					std::vector<cv::Point> tile_corners;
+					std::vector<cv::Size> tile_sizes;
+					bool boolUseGPU = false;
+					unsigned int blend_width = 8;
+					if(false==useBlender){
+						block_image = cv::Mat::zeros((int)(max_y-min_y), \
+													(int)(max_x-min_x), \
+													CV_8UC3);
+					}
+					else{
+						//create blender
+						blender = Blender::createDefault(Blender::MULTI_BAND, boolUseGPU);
+						MultiBandBlender *mb_ptr = \
+						   dynamic_cast<MultiBandBlender*>(static_cast<Blender*>(blender));
+						mb_ptr->setNumBands( \
+							static_cast<int>(ceil(log((double)blend_width)/log(2.f))-1.f) );
+						//prepare blender
+						for(std::vector<pyramid_tile_index>::iterator \
+								iter=base_tiles.begin(); \
+								iter!=base_tiles.end(); ++iter){
+							std::map<pyramid_tile_index, pyramid_tile_obj>::iterator \
+											layout_iter = this->base_tile_layout.find(*iter);
+							cv::Point tl_pos = \
+										cv::Point( \
+												layout_iter->second.tl_x_pos+ \
+													(float)layout_iter->second.x_offset- \
+													min_x, \
+												layout_iter->second.tl_y_pos+ \
+													(float)layout_iter->second.y_offset- \
+													min_y
+											);
+							cv::Size tile_size = cv::Size(layout_iter->second.width, \
+															layout_iter->second.height);
+							tile_corners.push_back( tl_pos );
+							tile_sizes.push_back( tile_size );
+						}
+						blender->prepare(tile_corners, tile_sizes);
+					}
 					for(std::vector<pyramid_tile_index>::iterator \
 							iter=base_tiles.begin(); \
 							iter!=base_tiles.end(); ++iter){
@@ -467,13 +508,44 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id){
 								//delete[] raw_buffer;
 							}
 						}
-						//copy it to block_image
-						new_img.copyTo( block_image(cv::Rect( \
-							layout_iter->second.tl_x_pos+(float)layout_iter->second.x_offset- \
-								min_x, \
-							layout_iter->second.tl_y_pos+(float)layout_iter->second.y_offset- \
-								min_y, \
-							layout_iter->second.width, layout_iter->second.height)) );
+						if(false==useBlender){
+							//copy it to block_image
+							new_img.copyTo( block_image(cv::Rect( \
+								layout_iter->second.tl_x_pos+(float)layout_iter->second.x_offset- \
+									min_x, \
+								layout_iter->second.tl_y_pos+(float)layout_iter->second.y_offset- \
+									min_y, \
+								layout_iter->second.width, layout_iter->second.height)) );
+						}
+						else{
+							//add image to blender
+							cv::Mat tile_mask = cv::Mat::zeros(new_img.size(), CV_8U);
+							tile_mask( \
+										cv::Rect(0, 0, \
+											layout_iter->second.width, \
+											layout_iter->second.height) \
+									).setTo(cv::Scalar::all(255));
+							cv::Point tl_pos = \
+										cv::Point( \
+												layout_iter->second.tl_x_pos+ \
+													(float)layout_iter->second.x_offset- \
+													min_x, \
+												layout_iter->second.tl_y_pos+ \
+													(float)layout_iter->second.y_offset- \
+													min_y
+											);
+							cv::Mat image_s;
+							new_img.convertTo(image_s, CV_16S);
+							blender->feed( \
+									image_s, tile_mask, tl_pos \
+									);
+						}
+					}
+					if(useBlender){
+						//perform blending
+						cv::Mat out_image_s, out_mask;
+						blender->blend(out_image_s, out_mask);
+						out_image_s.convertTo(block_image, CV_8U);
 					}
 					//output to tile with tile_width and tile_height
 					for(std::vector<pyramid_tile_index>::iterator \
