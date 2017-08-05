@@ -7,6 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <math.h>
 using namespace cv::detail;
 /*constant definition*/
 /*local var definition*/
@@ -112,6 +113,8 @@ int dm_egyptian_pyramid_lib::build(int tile_range_x, int tile_range_y, \
 			workers[i].join();
 		}
 		//post process(output info)
+		r = this->outputPyramidInfo();
+		if(DM_IMG_PROC_RETURN_OK!=r) return r;
 	}
 	/*return ok*/
 	return DM_IMG_PROC_RETURN_OK;
@@ -581,7 +584,10 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 													 NumberToString(this->mat_id)+"_"+ \
 													 NumberToString(iter->x)+"_"+ \
 													 NumberToString(iter->y)+"_"+ \
-													 NumberToString(iter->pyramid_level)+".jpg";
+													 NumberToString( \
+															 (int)pow( 2.0, \
+																 (double)(iter->pyramid_level-1) \
+																 ) )+".jpg";
 							std::vector<uchar> jpg_image;
 							cv::imencode(".jpg", new_img, jpg_image, comp_params);
 							FILE *pFile = std::fopen(out_string.c_str(), \
@@ -650,7 +656,10 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 												 NumberToString(this->mat_id)+"_"+ \
 												 NumberToString(iter->x)+"_"+ \
 												 NumberToString(iter->y)+"_"+ \
-												 NumberToString(iter->pyramid_level)+".jpg";
+												 NumberToString( \
+														 (int)pow( 2.0, \
+															 (double)(iter->pyramid_level-1) \
+															 ) )+".jpg";
 						std::vector<uchar> jpg_image;
 						cv::imencode(".jpg", new_img, jpg_image, comp_params);
 						FILE *pFile = std::fopen(out_string.c_str(), \
@@ -772,7 +781,10 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 						NumberToString(this->mat_id)+ \
 						"_"+NumberToString(target_index.x)+ \
 						"_"+NumberToString(target_index.y)+ \
-						"_"+NumberToString(target_index.pyramid_level)+".jpg", \
+						 "_"+NumberToString( \
+									 (int)pow( 2.0, \
+										 (double)(target_index.pyramid_level-1) \
+										 ) )+".jpg", \
 						cv::IMREAD_UNCHANGED);
 				//test_mtx.unlock();
 				if(false==raw_img.empty()){
@@ -823,4 +835,48 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 	}
 	/*return*/
 	return;
+}
+/*output pyramid info to local disk*/
+int dm_egyptian_pyramid_lib::outputPyramidInfo(){
+	/*check input*/
+	if(this->pyramid_tile_layout.empty()){
+		return DM_IMG_PROC_RETURN_FAIL;
+	}
+	/*local var*/
+	std::ofstream pyramid_info_out;
+	std::string file_name_str;
+	/*init*/
+	file_name_str = this->output_file_dir_str+GetPyramidInfoFileName(this->mat_id);
+	/*output pyramid info*/
+	{
+		/*open file*/
+		pyramid_info_out.open(file_name_str.c_str());
+		if(false == pyramid_info_out.is_open() ){
+			return DM_IMG_PROC_RETURN_FAIL;
+		}
+		/*write total tile number*/
+		pyramid_info_out << "[tile_num]" << std::endl;
+		pyramid_info_out << (int)( this->pyramid_tile_layout.size() ) << std::endl;
+		/*write pyramid info*/
+		pyramid_info_out << "[pyramid_tile_pos_scene_topleft]" << std::endl;
+		for (std::map<pyramid_tile_index, pyramid_tile_obj>::iterator \
+				layout_iter = this->pyramid_tile_layout.begin(); \
+				layout_iter != this->pyramid_tile_layout.end(); \
+				++layout_iter) {
+			pyramid_info_out << layout_iter->first.x << "," << \
+								layout_iter->first.y << "," << \
+								 (int)pow( 2.0, \
+									 (double)( \
+										 layout_iter->first.pyramid_level-1 \
+										 ) ) << "," << \
+								layout_iter->second.tl_x_pos << "," << \
+								layout_iter->second.tl_y_pos << "," << \
+								layout_iter->second.width << "," << \
+								layout_iter->second.height << std::endl;
+		}
+		/*close file*/
+		pyramid_info_out.close();
+	}
+	/*return*/
+	return DM_IMG_PROC_RETURN_OK;
 }

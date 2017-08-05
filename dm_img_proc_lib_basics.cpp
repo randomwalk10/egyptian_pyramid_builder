@@ -23,7 +23,7 @@ int getDirFreeSpace(const char *file_dir, float *free_bytes_ptr){
     /*return*/
     return DM_IMG_PROC_RETURN_OK;
 }
-#elif __linux__
+#elif __linux__ || __APPLE__
 int getDirFreeSpace(const char *file_dir, float *free_bytes_ptr){
     /*check input*/
     if( (NULL==file_dir)||(NULL==free_bytes_ptr) ){
@@ -70,4 +70,7 @@ std::string GetScanInfoFileName(int mat_id){
 }
 std::string GetAlignInfoFileName(int mat_id){
     return "/alignment_info_"+NumberToString(mat_id)+".txt";
+}
+std::string GetPyramidInfoFileName(int mat_id){
+	return "/pyramid_info_"+NumberToString(mat_id)+".txt";
 }

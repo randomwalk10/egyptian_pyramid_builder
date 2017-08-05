@@ -47,6 +47,7 @@ class dm_egyptian_pyramid_lib{
 		void copyToBlock(pyramid_tile_index &target_index, \
 				cv::Mat &block_image, \
 				cv::Rect copyArea);
+		int outputPyramidInfo();
 		dm_img_lrucache_lib *lru_cache_ptr;
 };
 #endif

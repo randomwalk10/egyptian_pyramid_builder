@@ -4,7 +4,7 @@
 #ifdef _WIN32
     #include "windows.h"
     #include "winbase.h"
-#elif __linux__
+#elif __linux__ || __APPLE__
     #include <sys/statvfs.h>
 #else
     #error "Unknow OS"
@@ -31,4 +31,5 @@ std::string NumberToString( T Number );
 std::string getTilePath(const char* tile_dir, int mat_id, int x, int y);
 std::string GetScanInfoFileName(int mat_id);
 std::string GetAlignInfoFileName(int mat_id);
+std::string GetPyramidInfoFileName(int mat_id);
 #endif // DM_IMG_PROC_LIB_BASICS_H
