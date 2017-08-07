@@ -557,7 +557,7 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 						std::map<pyramid_tile_index, pyramid_tile_obj>::iterator \
 										layout_iter = this->pyramid_tile_layout.find(*iter); 
 						cv::Mat new_img = cv::Mat::zeros(layout_iter->second.height, \
-														layout_iter->second.width, 
+														layout_iter->second.width, \
 														CV_8UC3);
 						cv::Rect tile_rect = cv::Rect( \
 								(int)(layout_iter->second.tl_x_pos+layout_iter->second.x_offset), \
@@ -570,8 +570,12 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 												out_rect.tl().y-min_y, \
 												out_rect.width, out_rect.height));
 							copy_image.copyTo( new_img( cv::Rect( \
-											out_rect.tl().x-(int)layout_iter->second.tl_x_pos, \
-											out_rect.tl().y-(int)layout_iter->second.tl_y_pos, \
+											out_rect.tl().x- \
+												(int)(layout_iter->second.tl_x_pos+ \
+														layout_iter->second.x_offset), \
+											out_rect.tl().y- \
+												(int)(layout_iter->second.tl_y_pos+ \
+														layout_iter->second.y_offset), \
 											out_rect.width, out_rect.height) ) );
 						}
 						//save to disk and cache
