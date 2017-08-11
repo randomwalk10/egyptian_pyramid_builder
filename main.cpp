@@ -151,8 +151,6 @@ int egyptian_pyramid(const char* input_tile_dir, \
 													 tile_iter->second.tl_x_pos);
 						tile_iter->second.y_offset = (int)(tl_y - \
 													 tile_iter->second.tl_y_pos);
-						tile_iter->second.tl_x_pos = tl_x;
-						tile_iter->second.tl_y_pos = tl_y;
                         tile_count++;
 						cout << "[" << tile_count << "]," << tile_iter->first.x << "," \
 							<< tile_iter->first.y << "," << tile_iter->first.pyramid_level << "," \
