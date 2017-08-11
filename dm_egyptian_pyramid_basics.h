@@ -1,5 +1,9 @@
 #ifndef DM_EGYPTIAN_PYRAMID_BASICS_H
 #define DM_EGYPTIAN_PYRAMID_BASICS_H
+/*included headers*/
+#include "dm_img_proc_lib_basics.h"
+/*const definition*/
+#define M_PR_HASH 10000
 /*type definition*/
 struct pyramid_tile_index{
 	int x;
@@ -32,6 +36,18 @@ inline bool operator<(const pyramid_tile_index &a, const pyramid_tile_index &b){
 
 inline bool operator==(const pyramid_tile_index &a, const pyramid_tile_index &b){
     return (a.x==b.x)&&(a.y==b.y)&&(a.pyramid_level==b.pyramid_level);
+}
+
+using namespace std;
+namespace std{
+	template<> struct hash<pyramid_tile_index>
+	{
+		size_t operator()(const pyramid_tile_index& k) const
+		{
+			return (k.pyramid_level%M_PR_HASH)*M_PR_HASH*M_PR_HASH + \
+				(k.y%M_PR_HASH)*M_PR_HASH + (k.x%M_PR_HASH);
+		}
+	};
 }
 
 struct pyramid_tile_obj{

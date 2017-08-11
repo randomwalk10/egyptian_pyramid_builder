@@ -3,8 +3,8 @@
 /*included headers*/
 #include "dm_egyptian_pyramid_basics.h"
 #include "opencv2/opencv.hpp"
-//#include <unordered_map>
-#include <map>
+#include <unordered_map>
+//#include <map>
 #include <list>
 #include <utility>
 /*type definition*/
@@ -23,8 +23,8 @@ class dm_img_lrucache_lib{
 
 	private:
 		std::list<key_value_pair_t> _cache_items_list;
-		//std::unordered_map<pyramid_tile_index, list_iterator_t> _cache_items_map;
-		std::map<pyramid_tile_index, list_iterator_t> _cache_items_map;
+		std::unordered_map<pyramid_tile_index, list_iterator_t> _cache_items_map;
+		//std::map<pyramid_tile_index, list_iterator_t> _cache_items_map;
 		float _max_size;
 		float _cur_size;
 };
