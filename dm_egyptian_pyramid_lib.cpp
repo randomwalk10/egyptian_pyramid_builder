@@ -4,15 +4,24 @@
 #include "opencv2/opencv.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/stitching/detail/blenders.hpp"
+#include "opencv2/core/ocl.hpp"
+//#include "opencv2/core/mat.hpp"
+//#include "opencv2/core/bufferpool.hpp"
 #include <thread>
 #include <mutex>
 #include <chrono>
 #include <math.h>
+//#include <tbb/tbb.h>
 using namespace cv::detail;
 /*constant definition*/
 /*local var definition*/
 std::mutex work_queue_mtx;
 std::mutex lru_mtx;
+std::mutex done_mtx;
+#ifdef SINGLE_OUTPUT
+FILE* pSaveFile;
+int byte_counts;
+#endif
 /*local function definition*/
 bool findRectIntersect(cv::Rect& rect1, cv::Rect& rect2, \
 						cv::Rect& out_rect){
@@ -44,12 +53,20 @@ dm_egyptian_pyramid_lib::dm_egyptian_pyramid_lib(const char* input_file_dir, \
 												const unsigned int tile_width, \
 												const unsigned int tile_height, \
 												const float max_cache_size_in_megabytes){
+	cv::ocl::setUseOpenCL(false);
+	//cv::BufferPoolController* c = cv::ocl::getOpenCLAllocator()->getBufferPoolController();
+	//if(c){
+		//c->setMaxReservedSize(0);
+	//}
 	this->input_file_dir_str = std::string(input_file_dir);
 	this->output_file_dir_str = std::string(output_file_dir);
 	this->mat_id = mat_id;
 	this->tile_width = tile_width;
 	this->tile_height = tile_height;
 	this->lru_cache_ptr = new dm_img_lrucache_lib(max_cache_size_in_megabytes);
+#ifdef SINGLE_OUTPUT
+	byte_counts = 0;
+#endif
 }
 dm_egyptian_pyramid_lib::~dm_egyptian_pyramid_lib(){
 	this->clearAll();
@@ -64,6 +81,10 @@ void dm_egyptian_pyramid_lib::clearAll(){
 	this->pyramid_tile_layout.clear();
 	this->layer_sizes.clear();
 	this->lru_cache_ptr->clearAll();
+	this->processed_tiles.clear();
+#ifdef SINGLE_OUTPUT
+	byte_counts = 0;
+#endif
 }
 /*register tile info*/
 int dm_egyptian_pyramid_lib::registerBaseTile(int x_index, int y_index, \
@@ -90,6 +111,7 @@ int dm_egyptian_pyramid_lib::build(int tile_range_x, int tile_range_y, \
 	/*local var*/
 	int r;
 	std::vector<std::thread> workers;
+	//std::vector<tbb::tbb_thread> workers;
 	bool useBlender;
 	/*init*/
 	useBlender = (0==use_blender)?false:true;
@@ -102,15 +124,26 @@ int dm_egyptian_pyramid_lib::build(int tile_range_x, int tile_range_y, \
 		r = this->generateWorkSchedule(tile_range_x, tile_range_y);
 		if(DM_IMG_PROC_RETURN_OK!=r) return r;
 		//start work thread
+#ifdef SINGLE_OUTPUT
+		std::string out_string = \
+						 this->output_file_dir_str + "/output.bin";
+		pSaveFile = fopen(out_string.c_str(), "wb+");
+#endif
 		for (int i = 0; i < num_of_threads; ++i) {
 			workers.push_back(std::thread( \
 						&dm_egyptian_pyramid_lib::workerThread, this, i, useBlender \
 						));
+			//workers.push_back(tbb::tbb_thread( \
+						//&dm_egyptian_pyramid_lib::workerThread, this, i \
+						//));
 		}
 		//join threads
 		for (int i = 0; i < num_of_threads; ++i) {
 			workers[i].join();
 		}
+#ifdef SINGLE_OUTPUT
+		fclose(pSaveFile);
+#endif
 		//post process(output info)
 		r = this->outputPyramidInfo();
 		if(DM_IMG_PROC_RETURN_OK!=r) return r;
@@ -287,6 +320,7 @@ int dm_egyptian_pyramid_lib::generateWorkSchedule( \
 	}
 	/*generate work schedules*/
 	while(current_layer<=(int)this->layer_sizes.size()){
+	//while(current_layer<=1){
 		//get tile num for current layer
 		cur_tile_num_x = this->layer_sizes[current_layer-1].tile_num_x;
 		cur_tile_num_y = this->layer_sizes[current_layer-1].tile_num_y;
@@ -332,6 +366,11 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 	std::vector<int> comp_params;
 	/*init*/
 	{
+		cv::ocl::setUseOpenCL(false);
+		//cv::BufferPoolController* c = cv::ocl::getOpenCLAllocator()->getBufferPoolController();
+		//if(c){
+			//c->setMaxReservedSize(0);
+		//}
 		comp_params.push_back(cv::IMWRITE_JPEG_QUALITY);
 		comp_params.push_back(75);
 	}
@@ -453,13 +492,33 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 								dataExists = this->lru_cache_ptr->get(*iter, new_img);
 							}
 							if( false == dataExists ){
-								cv::Mat raw_img = cv::imread( \
+								std::string out_string = \
 										this->input_file_dir_str+"/tile_"+ \
 										NumberToString(this->mat_id)+ \
 										"_"+NumberToString(iter->x)+ \
-										"_"+NumberToString(iter->y)+".jpg", \
-										cv::IMREAD_UNCHANGED);
-								if(false==raw_img.empty()){
+										"_"+NumberToString(iter->y)+".jpg";
+
+								FILE* pFile = fopen(out_string.c_str(), "rb");
+								if(pFile){
+									//read and decode into raw image
+									fseek(pFile, 0L, SEEK_END);
+									size_t sz = ftell(pFile);
+									fseek(pFile, 0L, SEEK_SET);
+									char* jpg_buffer = new char[sz];
+									size_t read_sz = fread(jpg_buffer, sizeof(char), \
+																sz, pFile);
+									(void) read_sz;
+									//cv::Mat raw_img;
+									//try{
+										//raw_img = cv::imdecode(cv::Mat(1, sz, CV_8UC1, jpg_buffer), \
+																//CV_LOAD_IMAGE_UNCHANGED);
+									//}
+									//catch( cv::Exception& e ){
+										//printf("%s\n", e.what());
+									//}
+									cv::Mat raw_img = cv::imdecode(cv::Mat(1, sz, CV_8UC1, jpg_buffer), \
+															CV_LOAD_IMAGE_UNCHANGED);
+									//resize to new image
 									cv::Point img_offset = cv::Point( \
 											layout_iter->second.x_offset, \
 											layout_iter->second.y_offset );
@@ -468,11 +527,34 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 											layout_iter->second.height );
 									new_img = cv::Mat(raw_img, \
 												cv::Rect(img_offset, img_size));
+									delete[] jpg_buffer;
+									fclose(pFile);
 									{
 										std::lock_guard<std::mutex> lck(lru_mtx);
 										this->lru_cache_ptr->put(*iter, new_img);
 									}
 								}
+
+								//cv::Mat raw_img = cv::imread( \
+										//this->input_file_dir_str+"/tile_"+ \
+										//NumberToString(this->mat_id)+ \
+										//"_"+NumberToString(iter->x)+ \
+										//"_"+NumberToString(iter->y)+".jpg", \
+										//cv::IMREAD_UNCHANGED);
+								//if(false==raw_img.empty()){
+									//cv::Point img_offset = cv::Point( \
+											//layout_iter->second.x_offset, \
+											//layout_iter->second.y_offset );
+									//cv::Size img_size = cv::Size( \
+											//layout_iter->second.width, \
+											//layout_iter->second.height );
+									//new_img = cv::Mat(raw_img, \
+												//cv::Rect(img_offset, img_size));
+									//{
+										//std::lock_guard<std::mutex> lck(lru_mtx);
+										//this->lru_cache_ptr->put(*iter, new_img);
+									//}
+								//}
 								
 							}
 						}
@@ -559,12 +641,29 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 																 ) )+".jpg";
 							std::vector<uchar> jpg_image;
 							cv::imencode(".jpg", new_img, jpg_image, comp_params);
-							FILE *pFile = std::fopen(out_string.c_str(), \
+#ifndef SINGLE_OUTPUT
+							FILE *pFile = fopen(out_string.c_str(), \
 														"wb");
-							std::fwrite(&jpg_image[0], sizeof(char), \
+							fwrite(&jpg_image[0], sizeof(char), \
 											jpg_image.size(), pFile);
 							fclose(pFile);
+#else
+							done_mtx.lock();
+							fwrite(&jpg_image[0], sizeof(char), \
+											jpg_image.size(), pSaveFile);
+							std::vector<int> jpg_sizes;
+							jpg_sizes.push_back(byte_counts);
+							jpg_sizes.push_back(jpg_image.size());
+							this->processed_tiles[*iter] = jpg_sizes;
+							byte_counts+=jpg_image.size();
+							done_mtx.unlock();
+#endif
 						}
+#ifndef SINGLE_OUTPUT
+						done_mtx.lock();
+						this->processed_tiles.push_back(*iter);
+						done_mtx.unlock();
+#endif
 					}
 				}
 			}
@@ -631,12 +730,29 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 															 ) )+".jpg";
 						std::vector<uchar> jpg_image;
 						cv::imencode(".jpg", new_img, jpg_image, comp_params);
-						FILE *pFile = std::fopen(out_string.c_str(), \
+#ifndef SINGLE_OUTPUT
+						FILE *pFile = fopen(out_string.c_str(), \
 													"wb");
-						std::fwrite(&jpg_image[0], sizeof(char), \
+						fwrite(&jpg_image[0], sizeof(char), \
 										jpg_image.size(), pFile);
 						fclose(pFile);
+#else
+						done_mtx.lock();
+						fwrite(&jpg_image[0], sizeof(char), \
+										jpg_image.size(), pSaveFile);
+						std::vector<int> jpg_sizes;
+						jpg_sizes.push_back(byte_counts);
+						jpg_sizes.push_back(jpg_image.size());
+						this->processed_tiles[*iter] = jpg_sizes;
+						byte_counts+=jpg_image.size();
+						done_mtx.unlock();
+#endif
 					}
+#ifndef SINGLE_OUTPUT
+					done_mtx.lock();
+					this->processed_tiles.push_back(*iter);
+					done_mtx.unlock();
+#endif
 				}
 			}
 		}
@@ -737,14 +853,46 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 	/*copy to block*/
 	if(this->pyramid_tile_layout.end()!=layout_iter){
 		cv::Mat raw_img;
+#ifdef SINGLE_OUTPUT
+		int data_pos;
+		int data_size;
+#endif
 		while(false==exitFlag){
+			{
+				bool isTileProcessed;
+				do{
+					done_mtx.lock();
+#ifndef SINGLE_OUTPUT
+					isTileProcessed = ( \
+										this->processed_tiles.end()!=\
+										std::find(this->processed_tiles.begin(), \
+											this->processed_tiles.end(), target_index) \
+										);
+#else
+					std::map<pyramid_tile_index, std::vector<int>>::iterator \
+							processed_tiles_iter = this->processed_tiles.find(target_index);
+					isTileProcessed = (this->processed_tiles.end()==processed_tiles_iter) ?
+																		false : true;
+					if(isTileProcessed){
+						data_pos = processed_tiles_iter->second[0];
+						data_size = processed_tiles_iter->second[1];
+					}
+#endif
+					done_mtx.unlock();
+					if(false==isTileProcessed){
+						std::this_thread::sleep_for( \
+								std::chrono::milliseconds(10));
+					}
+				}while(false==isTileProcessed);
+			}
 			{
 				std::lock_guard<std::mutex> lck(lru_mtx);
 				dataExists = \
 							 this->lru_cache_ptr->get(target_index, raw_img);
 			}
 			if(false==dataExists){
-				raw_img = cv::imread( \
+#ifndef SINGLE_OUTPUT
+				std::string out_string = \
 						this->output_file_dir_str+"/pr_"+ \
 						NumberToString(this->mat_id)+ \
 						"_"+NumberToString(target_index.x)+ \
@@ -752,17 +900,81 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 						 "_"+NumberToString( \
 									 (int)pow( 2.0, \
 										 (double)(target_index.pyramid_level-1) \
-										 ) )+".jpg", \
-						cv::IMREAD_UNCHANGED);
-				if(false==raw_img.empty()){
+										 ) )+".jpg";
+#else
+				std::string out_string = \
+						this->output_file_dir_str+"/output.bin";
+#endif
+
+#ifndef SINGLE_OUTPUT
+				FILE* pFile = fopen(out_string.c_str(), "rb");
+				if(pFile){
+					fseek(pFile, 0L, SEEK_END);
+					size_t sz = ftell(pFile);
+					fseek(pFile, 0L, SEEK_SET);
+					char* jpg_buffer = new char[sz];
+					size_t read_sz = fread(jpg_buffer, sizeof(char), \
+												sz, pFile);
+					(void) read_sz;
+					//try{
+						//raw_img = cv::imdecode(cv::Mat(1, sz, CV_8UC1, jpg_buffer), \
+												//CV_LOAD_IMAGE_UNCHANGED);
+					//}
+					//catch( cv::Exception& e ){
+						//printf("%s\n", e.what());
+					//}
+					raw_img = cv::imdecode(cv::Mat(1, sz, CV_8UC1, jpg_buffer), \
+											CV_LOAD_IMAGE_UNCHANGED);
+					delete[] jpg_buffer;
+					fclose(pFile);
 					exitFlag = true;
 				}
 				else std::this_thread::sleep_for( \
 						std::chrono::milliseconds(10));
+#else
+				done_mtx.lock();
+				FILE* pFile = fopen(out_string.c_str(), "rb");
+				size_t sz = data_size;
+				fseek(pFile, data_pos, SEEK_SET);
+				char* jpg_buffer = new char[sz];
+				size_t read_sz = fread(jpg_buffer, sizeof(char), \
+											sz, pFile);
+				(void) read_sz;
+				fclose(pFile);
+				done_mtx.unlock();
+				raw_img = cv::imdecode(cv::Mat(1, sz, CV_8UC1, jpg_buffer), \
+										CV_LOAD_IMAGE_UNCHANGED);
+				delete[] jpg_buffer;
+				exitFlag = true;
+#endif
+
+				//raw_img = cv::imread( \
+						//this->output_file_dir_str+"/pr_"+ \
+						//NumberToString(this->mat_id)+ \
+						//"_"+NumberToString(target_index.x)+ \
+						//"_"+NumberToString(target_index.y)+ \
+						 //"_"+NumberToString( \
+									 //(int)pow( 2.0, \
+										 //(double)(target_index.pyramid_level-1) \
+										 //) )+".jpg", \
+						//cv::IMREAD_UNCHANGED);
+				//if(false==raw_img.empty()){
+					//exitFlag = true;
+				//}
+				//else std::this_thread::sleep_for( \
+						//std::chrono::milliseconds(10));
 			}
 			else exitFlag = true;
 		}
 		raw_img.copyTo( block_image( copyArea ) );
+		//try{
+			//raw_img.copyTo( block_image( copyArea ) );
+		//}
+		//catch(cv::Exception& e){
+			//printf("%s\n", e.what());
+			//printf("raw_img size %dx%d\n", raw_img.cols, raw_img.rows);
+			//printf("copyArea size %dx%d\n", copyArea.width, copyArea.height);
+		//}
 		
 	}
 	/*return*/

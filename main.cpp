@@ -211,7 +211,7 @@ int egyptian_pyramid(const char* input_tile_dir, \
 			clock_gettime(CLOCK_MONOTONIC, &start);
 #endif
 
-			devPtr->build(50, 50, 7, 1);
+			devPtr->build(20, 20, 4, 0);
 
 
 			cout << "egyptian pyramiding is finished";
@@ -232,25 +232,32 @@ int egyptian_pyramid(const char* input_tile_dir, \
 
 int main(int argc, char *argv[])
 {
+	getchar();
 	std::string input_file_dir = "./data";
 	std::string output_file_dir = "./output";
-	dm_egyptian_pyramid_lib dui = dm_egyptian_pyramid_lib( \
-													input_file_dir.c_str(), \
-													output_file_dir.c_str(), \
-													0, 256, 256, 16000.0);
+	//dm_egyptian_pyramid_lib* devPtr = new dm_egyptian_pyramid_lib( \
+													//input_file_dir.c_str(), \
+													//output_file_dir.c_str(), \
+													//0, 256, 256, 16000.0);
 
 	for (int i = 0; i < 1; ++i) {
+		dm_egyptian_pyramid_lib* devPtr = new dm_egyptian_pyramid_lib( \
+														input_file_dir.c_str(), \
+														output_file_dir.c_str(), \
+														0, 256, 256, 2000.0);
 		printf("test#%d starts\n", i+1);
 
 		int r = egyptian_pyramid(input_file_dir.c_str(), \
-									0, &dui);
+									0, devPtr);
 		if(0!=r){
 			printf("failed test\n");
 		}
 
 		printf("test#%d ends\n", i+1);
+		delete devPtr;
 	}
 
 	printf("hello world\n");
+	getchar();
 	return 0;
 }

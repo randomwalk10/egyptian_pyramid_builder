@@ -34,6 +34,11 @@ class dm_egyptian_pyramid_lib{
 		std::map<pyramid_tile_index, pyramid_tile_obj> pyramid_tile_layout;
 		std::vector<pyramid_layer_size> layer_sizes;
 		std::string input_file_dir_str, output_file_dir_str;
+#ifndef SINGLE_OUTPUT
+		std::vector<pyramid_tile_index> processed_tiles;
+#else
+		std::map<pyramid_tile_index, std::vector<int>> processed_tiles;
+#endif
 		int mat_id;
 		unsigned int tile_width;
 		unsigned int tile_height;
