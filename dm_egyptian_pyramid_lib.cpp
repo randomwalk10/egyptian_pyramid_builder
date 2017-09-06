@@ -361,8 +361,6 @@ int dm_egyptian_pyramid_lib::generateWorkSchedule( \
 void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBlender){
 	/*check input*/
 	/*local var*/
-	std::vector<pyramid_tile_index> tile_list;
-	int current_layer;
 	std::vector<int> comp_params;
 	/*init*/
 	{
@@ -376,6 +374,7 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 	}
 	/*start worker thread*/
 	while(1){
+		std::vector<pyramid_tile_index> tile_list;
 		//check work queue
 		{
 			std::lock_guard<std::mutex> lck(work_queue_mtx);
@@ -390,7 +389,7 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 		//start processing work
 		if(false == tile_list.empty()){
 			//get current layer number
-			current_layer = tile_list.front().pyramid_level;
+			int current_layer = tile_list.front().pyramid_level;
 			if (1==current_layer) {
 				//find rectangle enclosing all tiles in this work
 				//find tiles in base layer intersecting with the rect
