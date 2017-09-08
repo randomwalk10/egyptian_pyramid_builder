@@ -50,26 +50,49 @@ namespace std{
 	};
 }
 
-struct pyramid_tile_obj{
+struct base_tile_obj{
 	float tl_x_pos;
 	float tl_y_pos;
 	unsigned int width;
 	unsigned int height;
 	int x_offset;
 	int y_offset;
-	pyramid_tile_obj():tl_x_pos(0),tl_y_pos(0),\
+	int byte_pos;
+	int byte_size;
+	base_tile_obj():tl_x_pos(0),tl_y_pos(0),\
 						   width(0),height(0),\
-						   x_offset(0),y_offset(0){
+						   x_offset(0),y_offset(0),\
+							byte_pos(0),byte_size(0){
 	}
-	pyramid_tile_obj(const float &tl_x_pos, const float &tl_y_pos, \
+	base_tile_obj(const float &tl_x_pos, const float &tl_y_pos, \
 						const unsigned int &width, const unsigned int &height, \
-						const int &x_offset, const int &y_offset){
+						const int &x_offset, const int &y_offset, \
+						const int &byte_pos, const int &byte_size){
 		this->tl_x_pos = tl_x_pos;
 		this->tl_y_pos = tl_y_pos;
 		this->width = width;
 		this->height = height;
 		this->x_offset = x_offset;
 		this->y_offset = y_offset;
+		this->byte_pos = byte_pos;
+		this->byte_size = byte_size;
+	}
+};
+
+struct pyramid_tile_obj{
+	float tl_x_pos;
+	float tl_y_pos;
+	unsigned int width;
+	unsigned int height;
+	pyramid_tile_obj():tl_x_pos(0),tl_y_pos(0),\
+						   width(0),height(0){
+	}
+	pyramid_tile_obj(const float &tl_x_pos, const float &tl_y_pos, \
+						const unsigned int &width, const unsigned int &height){
+		this->tl_x_pos = tl_x_pos;
+		this->tl_y_pos = tl_y_pos;
+		this->width = width;
+		this->height = height;
 	}
 };
 

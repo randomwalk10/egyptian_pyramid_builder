@@ -22,7 +22,8 @@ class dm_egyptian_pyramid_lib{
 		int registerBaseTile(int x_index, int y_index, \
 						float tl_x_pos, float tl_y_pos, \
 						unsigned int width, unsigned int height, \
-						int x_offset, int y_offset);
+						int x_offset, int y_offset, \
+						int byte_pos, int byte_size);
 		/*start building*/
 		int build(int tile_range_x, int tile_range_y, \
 					int num_of_threads, unsigned int use_blender);
@@ -30,7 +31,7 @@ class dm_egyptian_pyramid_lib{
 
 	private:
 		std::queue<std::vector<pyramid_tile_index>> work_queue;
-		std::map<pyramid_tile_index, pyramid_tile_obj> base_tile_layout;
+		std::map<pyramid_tile_index, base_tile_obj> base_tile_layout;
 		std::map<pyramid_tile_index, pyramid_tile_obj> pyramid_tile_layout;
 		std::vector<pyramid_layer_size> layer_sizes;
 		std::string input_file_dir_str, output_file_dir_str;

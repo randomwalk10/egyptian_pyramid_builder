@@ -15,7 +15,7 @@ int egyptian_pyramid(const char* input_tile_dir, \
 	std::ifstream file_in;
 	std::string new_line;
     int total_tile_num;
-    std::map<pyramid_tile_index, pyramid_tile_obj> pyramid_tile_map;
+    std::map<pyramid_tile_index, base_tile_obj> pyramid_tile_map;
     const int min_index_x = 0;//1;//
     const int max_index_x = 1000;//20;//
     const int min_index_y = 0;//35;//
@@ -56,8 +56,55 @@ int egyptian_pyramid(const char* input_tile_dir, \
             }
         }
         cout << "total tile number is " << total_tile_num << endl;
-        /*read align info*/
+#ifdef SINGLE_OUTPUT
+        /*read size info*/
         int tile_count = 0;
+        while(!file_in.eof()){
+            getline(file_in, new_line);
+#ifdef _WIN32
+            if(new_line=="[tile_data_size]"){
+#else
+			//if(new_line=="[tile_data_size]\r"){
+			if(new_line=="[tile_data_size]"){
+#endif
+                for(int i=0;i<total_tile_num;i++){
+                    getline(file_in, new_line);
+                    istringstream ss(new_line);
+                    string token;
+                    /*x index*/
+                    getline(ss, token, ',');
+                    int x_index = atoi(token.c_str());
+                    /*y index*/
+                    getline(ss, token, ',');
+                    int y_index = atoi(token.c_str());
+                    /*byte pos*/
+                    getline(ss, token, ',');
+                    int byte_pos = atoi(token.c_str());
+                    /*byte size*/
+                    getline(ss, token, ',');
+                    int byte_size = atoi(token.c_str());
+                    /*add to tile map*/
+                    if( (x_index>=min_index_x)&& \
+                        (x_index<=max_index_x)&& \
+                        (y_index>=min_index_y)&& \
+                        (y_index<=max_index_y) ){
+                        pyramid_tile_map[ \
+							pyramid_tile_index(x_index, y_index, 0) ] = \
+							base_tile_obj(0, 0, 0, 0, 0, 0, byte_pos, byte_size);
+                        tile_count++;
+                    }
+                }
+                break;
+            }
+        }
+        cout << "tile sizes" << " of " << tile_count << " is loaded" << endl;
+#endif
+        /*read align info*/
+#ifndef SINGLE_OUTPUT
+        int tile_count = 0;
+#else
+		tile_count = 0;
+#endif
         while(!file_in.eof()){
             getline(file_in, new_line);
 #ifdef _WIN32
@@ -87,9 +134,17 @@ int egyptian_pyramid(const char* input_tile_dir, \
                         (x_index<=max_index_x)&& \
                         (y_index>=min_index_y)&& \
                         (y_index<=max_index_y) ){
+#ifndef SINGLE_OUTPUT
                         pyramid_tile_map[ \
 							pyramid_tile_index(x_index, y_index, 0) ] = \
-							pyramid_tile_obj(tl_x, tl_y, 0, 0, 0, 0);
+							base_tile_obj(tl_x, tl_y, 0, 0, 0, 0, 0, 0);
+#else
+						std::map<pyramid_tile_index, base_tile_obj>::iterator \
+							tile_iter = pyramid_tile_map.find( \
+									pyramid_tile_index(x_index, y_index, 0) );
+						tile_iter->second.tl_x_pos = tl_x;
+						tile_iter->second.tl_y_pos = tl_y;
+#endif
                         tile_count++;
                     }
                 }
@@ -142,7 +197,7 @@ int egyptian_pyramid(const char* input_tile_dir, \
                         (x_index<=max_index_x)&& \
                         (y_index>=min_index_y)&& \
                         (y_index<=max_index_y) ){
-						std::map<pyramid_tile_index, pyramid_tile_obj>::iterator \
+						std::map<pyramid_tile_index, base_tile_obj>::iterator \
 							tile_iter = pyramid_tile_map.find( \
 									pyramid_tile_index(x_index, y_index, 0) );
 						tile_iter->second.width = (unsigned int)tile_width;
@@ -175,7 +230,7 @@ int egyptian_pyramid(const char* input_tile_dir, \
 #else
 			clock_gettime(CLOCK_MONOTONIC, &start);
 #endif
-			for(std::map<pyramid_tile_index, pyramid_tile_obj>::iterator \
+			for(std::map<pyramid_tile_index, base_tile_obj>::iterator \
 					iter = pyramid_tile_map.begin(); \
 					iter != pyramid_tile_map.end(); ++iter){
 				r = devPtr->registerBaseTile(iter->first.x, iter->first.y, \
@@ -184,7 +239,9 @@ int egyptian_pyramid(const char* input_tile_dir, \
 										iter->second.width, \
 										iter->second.height, \
 										iter->second.x_offset, \
-										iter->second.y_offset);
+										iter->second.y_offset, \
+										iter->second.byte_pos, \
+										iter->second.byte_size);
 				if(DM_IMG_PROC_RETURN_OK!=r){
 					return -1;
 				}
@@ -211,7 +268,7 @@ int egyptian_pyramid(const char* input_tile_dir, \
 			clock_gettime(CLOCK_MONOTONIC, &start);
 #endif
 
-			devPtr->build(20, 20, 4, 0);
+			devPtr->build(20, 20, 4, 1);
 
 
 			cout << "egyptian pyramiding is finished";
@@ -233,7 +290,11 @@ int egyptian_pyramid(const char* input_tile_dir, \
 int main(int argc, char *argv[])
 {
 	getchar();
-	std::string input_file_dir = "./data";
+#ifndef SINGLE_OUTPUT
+	std::string input_file_dir = "./data_multi";
+#else
+	std::string input_file_dir = "./data_single";
+#endif
 	std::string output_file_dir = "./output";
 	//dm_egyptian_pyramid_lib* devPtr = new dm_egyptian_pyramid_lib( \
 													//input_file_dir.c_str(), \

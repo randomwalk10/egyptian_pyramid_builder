@@ -1,11 +1,12 @@
-g++ -std=c++11 -O0 -g -c ./dm_img_proc_lib_basics.cpp
 if [[ "$1" == "s" ]]; then
 	echo "single mode(debug)"
+	g++ -D SINGLE_OUTPUT -std=c++11 -O0 -g -c ./dm_img_proc_lib_basics.cpp
 	g++ -D SINGLE_OUTPUT -std=c++11 -O0 -g -c ./dm_egyptian_pyramid_lib.cpp
-	g++ -std=c++11 -O0 -g -c ./dm_img_lrucache_lib.cpp
+	g++ -D SINGLE_OUTPUT -std=c++11 -O0 -g -c ./dm_img_lrucache_lib.cpp
 	g++ -D SINGLE_OUTPUT -std=c++11 -O0 -g -c ./main.cpp
 else
 	echo "multi mode(debug)"
+	g++ -std=c++11 -O0 -g -c ./dm_img_proc_lib_basics.cpp
 	g++ -std=c++11 -O0 -g -c ./dm_egyptian_pyramid_lib.cpp
 	g++ -std=c++11 -O0 -g -c ./dm_img_lrucache_lib.cpp
 	g++ -std=c++11 -O0 -g -c ./main.cpp
