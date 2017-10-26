@@ -57,7 +57,7 @@ struct base_tile_obj{
 	unsigned int height;
 	int x_offset;
 	int y_offset;
-	int byte_pos;
+	long long byte_pos;
 	int byte_size;
 	base_tile_obj():tl_x_pos(0),tl_y_pos(0),\
 						   width(0),height(0),\
@@ -67,7 +67,7 @@ struct base_tile_obj{
 	base_tile_obj(const float &tl_x_pos, const float &tl_y_pos, \
 						const unsigned int &width, const unsigned int &height, \
 						const int &x_offset, const int &y_offset, \
-						const int &byte_pos, const int &byte_size){
+						const long long &byte_pos, const int &byte_size){
 		this->tl_x_pos = tl_x_pos;
 		this->tl_y_pos = tl_y_pos;
 		this->width = width;

@@ -23,7 +23,7 @@ class dm_egyptian_pyramid_lib{
 						float tl_x_pos, float tl_y_pos, \
 						unsigned int width, unsigned int height, \
 						int x_offset, int y_offset, \
-						int byte_pos, int byte_size);
+						long long byte_pos, int byte_size);
 		/*start building*/
 		int build(int tile_range_x, int tile_range_y, \
 					int num_of_threads, unsigned int use_blender);

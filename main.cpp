@@ -7,6 +7,8 @@
 #include <thread>
 #include <chrono>
 
+#define cycle_len (1<<30)
+
 using namespace std;
 int egyptian_pyramid(const char* input_tile_dir, \
 							const int mat_id, \
@@ -77,9 +79,15 @@ int egyptian_pyramid(const char* input_tile_dir, \
                     /*y index*/
                     getline(ss, token, ',');
                     int y_index = atoi(token.c_str());
+					/*cycle index*/
+                    getline(ss, token, ',');
+					int byte_cycle = atoi(token.c_str());
                     /*byte pos*/
                     getline(ss, token, ',');
                     int byte_pos = atoi(token.c_str());
+					long long byte_index = (long long)(byte_cycle)* \
+										   (long long)cycle_len+ \
+										   (long long)byte_pos;
                     /*byte size*/
                     getline(ss, token, ',');
                     int byte_size = atoi(token.c_str());
@@ -90,7 +98,7 @@ int egyptian_pyramid(const char* input_tile_dir, \
                         (y_index<=max_index_y) ){
                         pyramid_tile_map[ \
 							pyramid_tile_index(x_index, y_index, 0) ] = \
-							base_tile_obj(0, 0, 0, 0, 0, 0, byte_pos, byte_size);
+							base_tile_obj(0, 0, 0, 0, 0, 0, byte_index, byte_size);
                         tile_count++;
                     }
                 }

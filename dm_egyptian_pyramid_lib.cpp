@@ -92,7 +92,7 @@ int dm_egyptian_pyramid_lib::registerBaseTile(int x_index, int y_index, \
 										float tl_x_pos, float tl_y_pos, \
 										unsigned int width, unsigned int height, \
 										int x_offset, int y_offset, \
-										int byte_pos, int byte_size){
+										long long byte_pos, int byte_size){
 	pyramid_tile_index new_tile_index = pyramid_tile_index(x_index, y_index, 0);
 	base_tile_obj  new_tile_obj = base_tile_obj(tl_x_pos, tl_y_pos, \
 														width, height, \
