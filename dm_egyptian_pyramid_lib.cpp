@@ -14,13 +14,16 @@
 //#include <tbb/tbb.h>
 using namespace cv::detail;
 /*constant definition*/
+#ifdef SINGLE_OUTPUT
+#define cycle_len (1<<30)
+#endif
 /*local var definition*/
 std::mutex work_queue_mtx;
 std::mutex lru_mtx;
 std::mutex done_mtx;
 #ifdef SINGLE_OUTPUT
 FILE* pSaveFile;
-int byte_counts;
+long long byte_counts;
 std::ofstream pyramid_info_out;
 #endif
 /*local function definition*/
@@ -646,15 +649,16 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 							done_mtx.lock();
 							fwrite(&jpg_image[0], sizeof(char), \
 											jpg_image.size(), pSaveFile);
-							std::vector<int> jpg_sizes;
+							std::vector<long long> jpg_sizes;
 							jpg_sizes.push_back(byte_counts);
-							jpg_sizes.push_back(jpg_image.size());
+							jpg_sizes.push_back((long long)jpg_image.size());
 							this->processed_tiles[*iter] = jpg_sizes;
 							pyramid_info_out << iter->x << "," << iter->y << "," << \
 												(int)pow(2.0, (double)(iter->pyramid_level-1)) \
-												<< "," << byte_counts << "," << \
+												<< "," << (byte_counts/cycle_len) << "," << \
+												(byte_counts%cycle_len) << "," << \
 												jpg_image.size() << std::endl;
-							byte_counts+=jpg_image.size();
+							byte_counts+=(long long)jpg_image.size();
 							done_mtx.unlock();
 #endif
 						}
@@ -739,15 +743,16 @@ void dm_egyptian_pyramid_lib::workerThread(const int thread_id, const bool useBl
 						done_mtx.lock();
 						fwrite(&jpg_image[0], sizeof(char), \
 										jpg_image.size(), pSaveFile);
-						std::vector<int> jpg_sizes;
+						std::vector<long long> jpg_sizes;
 						jpg_sizes.push_back(byte_counts);
-						jpg_sizes.push_back(jpg_image.size());
+						jpg_sizes.push_back((long long)jpg_image.size());
 						this->processed_tiles[*iter] = jpg_sizes;
 						pyramid_info_out << iter->x << "," << iter->y << "," << \
 											(int)pow(2.0, (double)(iter->pyramid_level-1)) \
-											<< "," << byte_counts << "," << \
+											<< "," << (byte_counts/cycle_len) << "," << \
+											(byte_counts%cycle_len) << "," << \
 											jpg_image.size() << std::endl;
-						byte_counts+=jpg_image.size();
+						byte_counts+=(long long)jpg_image.size();
 						done_mtx.unlock();
 #endif
 					}
@@ -858,8 +863,8 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 	if(this->pyramid_tile_layout.end()!=layout_iter){
 		cv::Mat raw_img;
 #ifdef SINGLE_OUTPUT
-		int data_pos;
-		int data_size;
+		long long data_pos;
+		long long data_size;
 #endif
 		while(false==exitFlag){
 			{
@@ -873,7 +878,7 @@ void dm_egyptian_pyramid_lib::copyToBlock(pyramid_tile_index &target_index, \
 											this->processed_tiles.end(), target_index) \
 										);
 #else
-					std::map<pyramid_tile_index, std::vector<int>>::iterator \
+					std::map<pyramid_tile_index, std::vector<long long>>::iterator \
 							processed_tiles_iter = this->processed_tiles.find(target_index);
 					isTileProcessed = (this->processed_tiles.end()==processed_tiles_iter) ?
 																		false : true;

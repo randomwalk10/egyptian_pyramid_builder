@@ -38,7 +38,7 @@ class dm_egyptian_pyramid_lib{
 #ifndef SINGLE_OUTPUT
 		std::vector<pyramid_tile_index> processed_tiles;
 #else
-		std::map<pyramid_tile_index, std::vector<int>> processed_tiles;
+		std::map<pyramid_tile_index, std::vector<long long>> processed_tiles;
 #endif
 		int mat_id;
 		unsigned int tile_width;
